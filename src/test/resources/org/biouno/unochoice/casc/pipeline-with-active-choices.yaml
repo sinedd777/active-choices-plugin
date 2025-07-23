@@ -1,0 +1,73 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      pipelineJob('test-pipeline-active-choices') {
+        description('Test pipeline with Active Choices parameters')
+        definition {
+          cps {
+            script('''
+              pipeline {
+                agent any
+                parameters {
+                  activeChoice(
+                    name: 'ENVIRONMENT',
+                    description: 'Select the deployment environment',
+                    choiceType: 'PT_SINGLE_SELECT',
+                    script: groovyScript {
+                      script('return ["development", "staging", "production"]')
+                    }
+                  )
+                  
+                  reactiveChoice(
+                    name: 'DEPLOY_TARGET',
+                    description: 'Deploy target based on environment',
+                    choiceType: 'PT_SINGLE_SELECT',
+                    referencedParameters: 'ENVIRONMENT',
+                    script: groovyScript {
+                      script('''
+                        def targets = [:]
+                        targets['development'] = ['dev-server-1', 'dev-server-2']
+                        targets['staging'] = ['stage-server-1']
+                        targets['production'] = ['prod-server-1', 'prod-server-2', 'prod-server-3']
+                        
+                        return targets[ENVIRONMENT] ?: ['unknown']
+                      ''')
+                    }
+                  )
+                  
+                  activeChoiceHtml(
+                    name: 'DEPLOYMENT_INFO',
+                    description: 'Deployment information',
+                    choiceType: 'ET_FORMATTED_HTML',
+                    referencedParameters: 'ENVIRONMENT,DEPLOY_TARGET',
+                    script: groovyScript {
+                      script('''
+                        return """
+                          <h3>Deployment Summary</h3>
+                          <p><b>Environment:</b> ${ENVIRONMENT}</p>
+                          <p><b>Target:</b> ${DEPLOY_TARGET}</p>
+                          <p><b>Timestamp:</b> ${new Date()}</p>
+                        """
+                      ''')
+                    }
+                  )
+                }
+                
+                stages {
+                  stage('Deploy') {
+                    steps {
+                      echo "Deploying to ${params.ENVIRONMENT} on ${params.DEPLOY_TARGET}"
+                      echo "Deployment info: ${params.DEPLOYMENT_INFO}"
+                    }
+                  }
+                }
+              }
+            ''')
+          }
+        }
+      }

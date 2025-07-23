@@ -1,0 +1,235 @@
+jenkins:
+  systemMessage: "Jenkins with Active Choices JCasC Demo"
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+      - id: "admin"
+        password: "admin"
+        properties:
+        - "hudson.model.MyViewsProperty"
+        - "jenkins.security.ApiTokenProperty"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+jobs:
+  - script: >
+      freeStyleJob('demo-active-choices-casc') {
+        description('Demo of Active Choices parameters configured via JCasC')
+        
+        parameters {
+          activeChoice('ENVIRONMENT') {
+            description('Select deployment environment')
+            choiceType('PT_SINGLE_SELECT')
+            filterable(true)
+            filterLength(1)
+            groovyScript {
+              script('''
+                return [
+                  "development:selected",
+                  "staging", 
+                  "production"
+                ]
+              ''')
+            }
+          }
+          
+          reactiveChoice('SERVICE') {
+            description('Select service to deploy')
+            choiceType('PT_CHECKBOX')
+            referencedParameters('ENVIRONMENT')
+            filterable(true)
+            filterLength(2)
+            groovyScript {
+              script('''
+                def services = [:]
+                services['development'] = ['api-dev', 'web-dev', 'db-dev', 'cache-dev']
+                services['staging'] = ['api-stage', 'web-stage', 'db-stage']
+                services['production'] = ['api-prod', 'web-prod', 'db-prod', 'cache-prod', 'monitoring-prod']
+                
+                return services[ENVIRONMENT] ?: ['No services available']
+              ''')
+            }
+          }
+          
+          activeChoiceHtml('DEPLOYMENT_INFO') {
+            description('Deployment summary and configuration')
+            choiceType('ET_FORMATTED_HTML')
+            referencedParameters('ENVIRONMENT,SERVICE')
+            groovyScript {
+              script('''
+                def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss")
+                def serviceList = SERVICE instanceof List ? SERVICE.join(", ") : SERVICE
+                
+                return """
+                  <div style="border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+                    <h3>🚀 Deployment Configuration</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <td style="font-weight: bold; padding: 5px;">Environment:</td>
+                        <td style="padding: 5px; color: #0066cc;">${ENVIRONMENT}</td>
+                      </tr>
+                      <tr>
+                        <td style="font-weight: bold; padding: 5px;">Services:</td>
+                        <td style="padding: 5px; color: #0066cc;">${serviceList}</td>
+                      </tr>
+                      <tr>
+                        <td style="font-weight: bold; padding: 5px;">Generated:</td>
+                        <td style="padding: 5px; color: #666;">${timestamp}</td>
+                      </tr>
+                    </table>
+                    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                      ℹ️ This information is dynamically generated based on your selections above.
+                    </p>
+                  </div>
+                """
+              ''')
+            }
+          }
+          
+          activeChoiceHtml('DEPLOY_CONFIG') {
+            description('Hidden deployment configuration')
+            choiceType('ET_FORMATTED_HIDDEN_HTML')
+            referencedParameters('ENVIRONMENT,SERVICE')
+            omitValueField(false)
+            groovyScript {
+              script('''
+                import groovy.json.JsonBuilder
+                
+                def config = [
+                  environment: ENVIRONMENT,
+                  services: SERVICE instanceof List ? SERVICE : [SERVICE],
+                  timestamp: System.currentTimeMillis(),
+                  user: System.getProperty("user.name"),
+                  buildNumber: System.getenv("BUILD_NUMBER") ?: "local"
+                ]
+                
+                def json = new JsonBuilder(config).toPrettyString()
+                return "<input name='deploymentConfig' value='${json.replace("'", "&apos;")}' type='hidden'/>"
+              ''')
+            }
+          }
+        }
+        
+        steps {
+          shell('''
+            echo "=== Deployment Configuration ==="
+            echo "Environment: $ENVIRONMENT"
+            echo "Services: $SERVICE"
+            echo "Deployment Info: $DEPLOYMENT_INFO"
+            echo "Deploy Config: $DEPLOY_CONFIG"
+            echo "================================"
+            
+            # Parse the hidden config
+            echo "Hidden deployment configuration:"
+            echo "$deploymentConfig" | python3 -m json.tool || echo "Could not parse JSON"
+          ''')
+        }
+        
+        publishers {
+          archiveArtifacts {
+            pattern('**/deployment-*.log')
+            allowEmpty(true)
+          }
+        }
+      }
+
+  - script: >
+      pipelineJob('pipeline-active-choices-casc') {
+        description('Pipeline demo with Active Choices via JCasC')
+        definition {
+          cps {
+            script('''
+              pipeline {
+                agent any
+                
+                parameters {
+                  activeChoice(
+                    name: 'CLOUD_PROVIDER',
+                    description: 'Select cloud provider',
+                    choiceType: 'PT_SINGLE_SELECT',
+                    script: groovyScript {
+                      script('return ["aws:selected", "azure", "gcp", "on-premise"]')
+                    }
+                  )
+                  
+                  reactiveChoice(
+                    name: 'REGION',
+                    description: 'Select deployment region',
+                    choiceType: 'PT_SINGLE_SELECT', 
+                    referencedParameters: 'CLOUD_PROVIDER',
+                    script: groovyScript {
+                      script('''
+                        def regions = [:]
+                        regions['aws'] = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1']
+                        regions['azure'] = ['eastus', 'westeurope', 'southeastasia']
+                        regions['gcp'] = ['us-central1', 'europe-west1', 'asia-southeast1']
+                        regions['on-premise'] = ['datacenter-1', 'datacenter-2']
+                        
+                        return regions[CLOUD_PROVIDER] ?: ['No regions available']
+                      ''')
+                    }
+                  )
+                  
+                  activeChoiceHtml(
+                    name: 'DEPLOYMENT_SUMMARY',
+                    description: 'Deployment summary',
+                    choiceType: 'ET_FORMATTED_HTML',
+                    referencedParameters: 'CLOUD_PROVIDER,REGION',
+                    script: groovyScript {
+                      script('''
+                        return """
+                          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                      color: white; padding: 15px; border-radius: 8px;">
+                            <h4 style="margin: 0 0 10px 0;">☁️ Cloud Deployment Plan</h4>
+                            <p style="margin: 5px 0;"><strong>Provider:</strong> ${CLOUD_PROVIDER?.toUpperCase()}</p>
+                            <p style="margin: 5px 0;"><strong>Region:</strong> ${REGION}</p>
+                            <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.8;">
+                              Ready to deploy to ${CLOUD_PROVIDER} in ${REGION}
+                            </p>
+                          </div>
+                        """
+                      ''')
+                    }
+                  )
+                }
+                
+                stages {
+                  stage('Validate') {
+                    steps {
+                      echo "🔍 Validating deployment configuration..."
+                      echo "Cloud Provider: ${params.CLOUD_PROVIDER}"
+                      echo "Region: ${params.REGION}"
+                      script {
+                        if (!params.CLOUD_PROVIDER || !params.REGION) {
+                          error("Missing required parameters")
+                        }
+                      }
+                    }
+                  }
+                  
+                  stage('Deploy') {
+                    steps {
+                      echo "🚀 Deploying to ${params.CLOUD_PROVIDER} in ${params.REGION}..."
+                      echo "Deployment Summary: ${params.DEPLOYMENT_SUMMARY}"
+                      script {
+                        // Simulate deployment
+                        sleep(time: 2, unit: 'SECONDS')
+                        echo "✅ Deployment completed successfully!"
+                      }
+                    }
+                  }
+                }
+                
+                post {
+                  always {
+                    echo "📊 Deployment completed for ${params.CLOUD_PROVIDER}/${params.REGION}"
+                  }
+                }
+              }
+            ''')
+          }
+        }
+      }

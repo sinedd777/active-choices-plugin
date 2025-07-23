@@ -1,0 +1,25 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      freeStyleJob('test-scriptler-param') {
+        description('Test Scriptler parameter')
+        parameters {
+          activeChoice('SCRIPTLER_ENV') {
+            description('Environment from Scriptler script')
+            choiceType('SINGLE_SELECT')
+            scriptlerScript {
+              scriptlerScriptId('test-script.groovy')
+              isSandboxed(true)
+              parameters([
+                [name: 'param1', value: 'value1'],
+                [name: 'param2', value: 'value2']
+              ])
+            }
+          }
+        }
+      }

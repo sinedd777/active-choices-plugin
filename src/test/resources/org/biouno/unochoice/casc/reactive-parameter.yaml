@@ -1,0 +1,39 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      freeStyleJob('test-reactive-param') {
+        description('Test reactive parameter')
+        parameters {
+          activeChoice('ENV') {
+            description('Environment selection')
+            choiceType('SINGLE_SELECT')
+            groovyScript {
+              script('return ["dev", "qa", "prod"]')
+            }
+          }
+          
+          reactiveChoice('SERVICE') {
+            description('Service selection based on environment')
+            choiceType('SINGLE_SELECT')
+            referencedParameters('ENV')
+            groovyScript {
+              script('''
+                if (ENV == "dev") {
+                  return ["service-dev-1", "service-dev-2"]
+                } else if (ENV == "qa") {
+                  return ["service-qa-1", "service-qa-2"]
+                } else if (ENV == "prod") {
+                  return ["service-prod-1", "service-prod-2"]
+                } else {
+                  return ["Unknown environment"]
+                }
+              ''')
+            }
+          }
+        }
+      }

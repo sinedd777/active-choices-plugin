@@ -1,0 +1,73 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      freeStyleJob('test-advanced-features') {
+        description('Test advanced Active Choices features')
+        parameters {
+          activeChoice('FILTERABLE_ENV') {
+            description('Filterable environment selection')
+            choiceType('CHECKBOX')
+            filterable(true)
+            filterLength(2)
+            groovyScript {
+              script('''
+                return [
+                  "development-server-1",
+                  "development-server-2", 
+                  "staging-server-1",
+                  "staging-server-2",
+                  "production-server-1",
+                  "production-server-2",
+                  "production-server-3"
+                ]
+              ''')
+            }
+          }
+          
+          reactiveChoice('FILTERED_SERVICES') {
+            description('Services filtered by environment')
+            choiceType('MULTI_SELECT')
+            referencedParameters('FILTERABLE_ENV')
+            filterable(true)
+            filterLength(1)
+            groovyScript {
+              script('''
+                def services = []
+                if (FILTERABLE_ENV.contains('development')) {
+                  services.addAll(['dev-api', 'dev-web', 'dev-db'])
+                }
+                if (FILTERABLE_ENV.contains('staging')) {
+                  services.addAll(['stage-api', 'stage-web', 'stage-db'])
+                }
+                if (FILTERABLE_ENV.contains('production')) {
+                  services.addAll(['prod-api', 'prod-web', 'prod-db', 'prod-cache'])
+                }
+                return services.unique()
+              ''')
+            }
+          }
+          
+          activeChoiceHtml('HIDDEN_INFO') {
+            description('Hidden deployment configuration')
+            choiceType('FORMATTED_HIDDEN_HTML')
+            referencedParameters('FILTERABLE_ENV,FILTERED_SERVICES')
+            omitValueField(true)
+            groovyScript {
+              script('''
+                def config = [
+                  environment: FILTERABLE_ENV,
+                  services: FILTERED_SERVICES,
+                  timestamp: System.currentTimeMillis(),
+                  user: System.getProperty("user.name")
+                ]
+                return "<input name='deploymentConfig' value='${groovy.json.JsonBuilder(config).toString()}' type='hidden'/>"
+              ''')
+            }
+          }
+        }
+      }

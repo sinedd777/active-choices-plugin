@@ -1,0 +1,40 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      freeStyleJob('test-reference-param') {
+        description('Test reference parameter')
+        parameters {
+          activeChoice('ENV') {
+            description('Environment selection')
+            choiceType('SINGLE_SELECT')
+            groovyScript {
+              script('return ["dev", "qa", "prod"]')
+            }
+          }
+          
+          activeChoiceHtml('INFO') {
+            description('Environment information')
+            choiceType('FORMATTED_HTML')
+            referencedParameters('ENV')
+            groovyScript {
+              script('''
+                switch(ENV) {
+                  case "dev":
+                    return "<b>Development Environment</b><br/>Server: dev.example.com"
+                  case "qa":
+                    return "<b>QA Environment</b><br/>Server: qa.example.com"
+                  case "prod":
+                    return "<b>Production Environment</b><br/>Server: prod.example.com"
+                  default:
+                    return "<i>Please select an environment</i>"
+                }
+              ''')
+            }
+          }
+        }
+      }

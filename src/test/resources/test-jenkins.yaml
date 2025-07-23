@@ -1,0 +1,37 @@
+jenkins:
+  globalNodeProperties:
+  - envVars:
+      env:
+      - key: "TEST_ENV"
+        value: "casc-test"
+
+jobs:
+  - script: |
+      freeStyleJob('test-active-choices') {
+        parameters {
+          activeChoiceParam('ENV') {
+            description('Environment selection')
+            choiceType('SINGLE_SELECT')
+            groovyScript {
+              script('return ["dev", "qa", "prod"]')
+            }
+          }
+          
+          reactiveChoiceParam('SERVICE') {
+            description('Service selection based on environment')
+            choiceType('SINGLE_SELECT')
+            referencedParameters('ENV')
+            groovyScript {
+              script('''
+                if (ENV == "dev") {
+                  return ["service-dev-1", "service-dev-2"]
+                } else if (ENV == "qa") {
+                  return ["service-qa-1", "service-qa-2"]
+                } else {
+                  return ["service-prod-1", "service-prod-2"]
+                }
+              ''')
+            }
+          }
+        }
+      }

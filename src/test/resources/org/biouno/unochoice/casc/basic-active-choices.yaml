@@ -1,0 +1,20 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users: []
+
+jobs:
+  - script: >
+      freeStyleJob('test-basic-active-choices') {
+        description('Test basic Active Choices parameter')
+        parameters {
+          activeChoice('ENV') {
+            description('Environment selection')
+            choiceType('SINGLE_SELECT')
+            groovyScript {
+              script('return ["dev", "qa", "prod"]')
+            }
+          }
+        }
+      }
